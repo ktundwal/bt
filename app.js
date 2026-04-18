@@ -725,10 +725,11 @@ function wireLobby() {
 }
 
 function wireMatches() {
-  $('[data-role="matches-list"]').addEventListener('click', async (e) => {
+  // Score logging is open — anyone playing can log their match. PIN only
+  // gates structural changes (randomize, reset, court count).
+  $('[data-role="matches-list"]').addEventListener('click', (e) => {
     const logBtn = e.target.closest('[data-role="log-score"]')
     if (logBtn) {
-      if (!await requirePin('Logging scores requires the PIN.')) return
       const id = logBtn.dataset.match
       const a = $(`[data-score="${id}"][data-side="a"]`).value
       const b = $(`[data-score="${id}"][data-side="b"]`).value
@@ -737,7 +738,6 @@ function wireMatches() {
     }
     const clearBtn = e.target.closest('[data-role="clear-score"]')
     if (clearBtn) {
-      if (!await requirePin('Clearing a result requires the PIN.')) return
       clearScore(clearBtn.dataset.match)
     }
   })

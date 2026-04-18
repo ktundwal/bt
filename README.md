@@ -27,11 +27,13 @@ A zero-signup, zero-backend, peer-to-peer badminton tournament engine for your S
 | ------------------- | ---------- |
 | Join room, view     | No         |
 | Add yourself        | No         |
+| Log / clear a score | **No** — anyone playing can log their match |
 | Remove a player (after teams set) | Yes |
 | Randomize teams     | Yes        |
-| Log / clear a score | Yes        |
-| Change court count  | Yes (after teams set) |
+| Change court count (after teams set) | Yes |
 | Reset tournament    | Yes        |
+
+The PIN gates **structural changes only** — who's playing with whom, and how many courts. Scoring is deliberately open because the creator is usually on court, not next to the scoreboard, and blocking on them would stall the tournament.
 
 The PIN is stored only as a SHA-256 hash in the shared state. Cached on the admin's device in `localStorage` so they don't have to re-enter it on every action.
 
