@@ -1,14 +1,10 @@
 // ============================================================================
 // Carnage Courts — Badminton Tournament Engine
-// Zero-auth, peer-to-peer. State lives in localStorage; syncs via WebRTC.
+// State is persisted in Upstash Redis; every device reads/writes the same
+// canonical copy and subscribes to change events via Server-Sent Events.
+// localStorage is a cache for fast loads and offline viewing.
 // ============================================================================
 
-// Trystero "nostr" strategy: WebRTC signaling over public Nostr relays.
-// Unlike the default "torrent" strategy (BitTorrent trackers — often blocked
-// by managed-device firewalls and corporate DPI), Nostr uses plain wss://
-// connections to general-purpose relay servers, so it passes through
-// restrictive networks that block BitTorrent traffic.
-import { joinRoom, selfId } from 'https://cdn.jsdelivr.net/npm/@trystero-p2p/nostr@0.23.0/+esm'
 import {
   buildSchedule,
   generateRoomName,
@@ -17,6 +13,13 @@ import {
   toDateInputValue
 } from './lib/scheduler.mjs'
 import { validateScore } from './lib/scoring.mjs'
+import {
+  isConfigured as cloudConfigured,
+  getRoomState,
+  getRoomStates,
+  setRoomState,
+  subscribeToRoom
+} from './lib/cloudsync.mjs'
 
 // ---------------------------------------------------------------------------
 // Constants & config
@@ -64,10 +67,7 @@ const initialState = () => ({
 })
 
 let state = initialState()
-let roomHandle = null     // Trystero room
-let sendStateAction = null
-let getStateAction = null
-let peerCount = 0
+let unsubscribeFromRoom = null   // disposer for the current SSE subscription
 let myName = localStorage.getItem('cc:myName') || ''
 
 // ---------------------------------------------------------------------------
@@ -96,158 +96,81 @@ function loadLocal(roomId) {
 }
 
 // ---------------------------------------------------------------------------
-// P2P sync (Trystero / WebRTC)
+// Cloud sync (Upstash Redis REST + SSE)
 // ---------------------------------------------------------------------------
 
-function joinTrysteroRoom(roomId) {
-  // Entering a specific tournament — tear down the home-page listeners,
-  // the tournament's own room connection handles sync for this room, and
-  // keeping extra connections open is wasteful.
-  stopAllHomeListeners()
-  if (roomHandle) {
-    roomHandle.leave()
-    roomHandle = null
-  }
+async function joinCloudRoom(roomId) {
+  leaveCloudRoom()  // tear down any prior subscription
   setConnStatus('connecting', 'Connecting…')
 
-  try {
-    roomHandle = joinRoom({ appId: APP_ID }, roomId)
-  } catch (e) {
-    console.error('trystero join failed', e)
-    setConnStatus('offline', 'Offline (local only)')
-    return
-  }
-
-  const [sendSt, getSt] = roomHandle.makeAction('state')
-  sendStateAction = sendSt
-  getStateAction = getSt
-
-  getStateAction((remote, peerId) => {
-    if (!remote || typeof remote.v !== 'number') return
-    // Deletion tombstone: a peer deleted this tournament. Honor it —
-    // wipe our local copy and bounce back to the home page.
-    if (remote.deleted && remote.roomId === state.roomId) {
-      localStorage.removeItem(LS_STATE(state.roomId))
-      localStorage.removeItem(LS_PIN(state.roomId))
-      try { roomHandle?.leave() } catch {}
-      roomHandle = null
-      sendStateAction = null
-      getStateAction = null
-      state = initialState()
+  // Fetch the canonical copy. If it's ahead of our local, adopt it.
+  const remote = await getRoomState(roomId)
+  if (remote) {
+    if (remote.deleted) {
+      localStorage.removeItem(LS_STATE(roomId))
+      localStorage.removeItem(LS_PIN(roomId))
       clearRoomFromURL()
-      toast('Tournament deleted by admin')
+      state = initialState()
+      toast('Tournament deleted')
       showHome()
+      setConnStatus('offline', 'Offline')
       return
     }
-    if (remote.v > state.v) {
+    if ((remote.v || 0) > (state.v || 0)) {
       state = remote
       saveLocal()
       render()
-      toast('Synced from peer')
-    } else if (remote.v < state.v) {
-      // Peer is behind — push ours back to them
-      try { sendStateAction(state, peerId) } catch {}
+    } else if ((state.v || 0) > (remote.v || 0)) {
+      // Our local is ahead (e.g., offline edits). Push ours.
+      await setRoomState(roomId, state)
     }
-    // If v === v, assume same state; skip.
-  })
-
-  roomHandle.onPeerJoin(peerId => {
-    peerCount++
-    updatePeerCount()
-    setConnStatus('online', 'Online')
-    // New peer: send our state so they catch up
-    try { sendStateAction(state, peerId) } catch {}
-  })
-
-  roomHandle.onPeerLeave(() => {
-    peerCount = Math.max(0, peerCount - 1)
-    updatePeerCount()
-  })
-
-  // Mark as online once the room is successfully constructed
-  setConnStatus('online', peerCount > 0 ? 'Online' : 'Online (waiting for peers)')
-}
-
-function broadcastState() {
-  if (sendStateAction) {
-    try { sendStateAction(state) } catch (e) { console.warn('broadcast failed', e) }
+  } else if (state.v > 0 && state.roomId === roomId) {
+    // No remote copy yet, but we have local state — seed the cloud.
+    await setRoomState(roomId, state)
   }
-}
 
-// ---------------------------------------------------------------------------
-// Passive home listeners — while on the home view, open a WebRTC channel
-// to each tournament this device knows about so that updates (including
-// delete tombstones) propagate live to the roster we're looking at.
-// Torn down when the user enters a specific tournament.
-// ---------------------------------------------------------------------------
-
-const homeListeners = new Map()  // roomId -> { room, sendState }
-
-function joinHomeListener(roomId) {
-  if (homeListeners.has(roomId)) return
-  let room
-  try {
-    room = joinRoom({ appId: APP_ID }, roomId)
-  } catch (e) {
-    console.warn('home listener join failed', roomId, e)
-    return
-  }
-  const [sendState, getState] = room.makeAction('state')
-
-  getState((remote, peerId) => {
-    if (!remote || typeof remote.v !== 'number') return
-    if (remote.roomId && remote.roomId !== roomId) return
-    const local = loadLocal(roomId)
-    const localDeleted = local?.deleted === true
-    const remoteDeleted = remote.deleted === true
-
-    // Sticky deletion: once a tombstone is known locally, no newer
-    // non-deleted state may resurrect it. Push our tombstone back so
-    // the peer learns and propagates.
-    if (localDeleted && !remoteDeleted) {
-      try { sendState(local, peerId) } catch {}
+  // Subscribe: any published event triggers a fresh GET.
+  unsubscribeFromRoom = subscribeToRoom(roomId, async () => {
+    const fresh = await getRoomState(roomId)
+    if (!fresh) return
+    if (fresh.deleted && state.roomId === roomId) {
+      localStorage.removeItem(LS_STATE(roomId))
+      localStorage.removeItem(LS_PIN(roomId))
+      leaveCloudRoom()
+      state = initialState()
+      clearRoomFromURL()
+      toast('Tournament deleted')
+      showHome()
       return
     }
-
-    if ((remote.v || 0) > (local?.v || 0)) {
-      localStorage.setItem(LS_STATE(roomId), JSON.stringify(remote))
-      // Don't strip PIN on tombstone receipt — PIN was only cached on
-      // the original admin's device anyway.
-      if (!state.roomId) renderHome()
+    if ((fresh.v || 0) > (state.v || 0)) {
+      state = fresh
+      saveLocal()
+      render()
     }
   })
 
-  room.onPeerJoin(peerId => {
-    // Push our latest known state (which may be a tombstone). Tombstones
-    // propagate virally this way — every new WebRTC handshake re-delivers
-    // them to anyone who hadn't yet seen the delete.
-    const local = loadLocal(roomId)
-    if (local) { try { sendState(local, peerId) } catch {} }
-  })
-
-  homeListeners.set(roomId, { room, sendState })
+  setConnStatus(cloudConfigured() ? 'online' : 'offline',
+                cloudConfigured() ? 'Online' : 'Local only')
 }
 
-function leaveHomeListener(roomId) {
-  const h = homeListeners.get(roomId)
-  if (!h) return
-  try { h.room.leave() } catch {}
-  homeListeners.delete(roomId)
+function leaveCloudRoom() {
+  if (unsubscribeFromRoom) {
+    try { unsubscribeFromRoom() } catch {}
+    unsubscribeFromRoom = null
+  }
 }
 
-function startHomeListeners() {
-  const rooms = enumerateLocalRooms()
-  for (const s of rooms) joinHomeListener(s.roomId)
+// Push the current state to the cloud. Called after every mutate().
+// Fire-and-forget — local writes succeed regardless of network.
+function publishState() {
+  if (!state.roomId) return
+  setRoomState(state.roomId, state).catch(e => console.warn('publish failed', e))
 }
 
-function stopAllHomeListeners() {
-  for (const rid of [...homeListeners.keys()]) leaveHomeListener(rid)
-}
-
-// Record a tombstone for a room and broadcast it. The tombstone is kept
-// in localStorage (not removed) so the home listener keeps re-delivering
-// it to new peers via onPeerJoin — that's how a delete propagates virally
-// to anyone who wasn't online at the moment it was issued.
+// Marks a room as deleted in the cloud, which every subscriber picks up
+// and applies locally. Also writes the tombstone to localStorage on this
+// device so the UI updates immediately without waiting for the round-trip.
 async function broadcastDelete(roomId) {
   const local = loadLocal(roomId) || { roomId }
   const tombstone = {
@@ -257,21 +180,30 @@ async function broadcastDelete(roomId) {
     v: (local.v || 0) + 1,
     updatedAt: Date.now()
   }
-  // Persist first so any concurrent render / peer-join sees the tombstone.
   localStorage.setItem(LS_STATE(roomId), JSON.stringify(tombstone))
   localStorage.removeItem(LS_PIN(roomId))
+  await setRoomState(roomId, tombstone)
+}
 
-  // Ensure a home listener is open for this room so the tombstone is
-  // served to both current peers and anyone who joins later.
-  if (!homeListeners.has(roomId)) joinHomeListener(roomId)
-  const handle = homeListeners.get(roomId)
-  if (handle) {
-    // Give the listener a moment to learn about existing peers, then
-    // broadcast and wait a bit for delivery ACKs.
-    await new Promise(r => setTimeout(r, 400))
-    try { handle.sendState(tombstone) } catch {}
-    await new Promise(r => setTimeout(r, 800))
+// On home view, pull the latest state of every locally-known room so
+// the card list reflects any updates made on other devices while this
+// one was offline. Idempotent; safe to call on every home render.
+async function syncAllRoomsFromCloud() {
+  if (!cloudConfigured()) return
+  const local = enumerateLocalRooms()
+  if (!local.length) return
+  const states = await getRoomStates(local.map(s => s.roomId))
+  let changed = false
+  for (const rid in states) {
+    const remote = states[rid]
+    if (!remote) continue
+    const cur = loadLocal(rid)
+    if (!cur || (remote.v || 0) > (cur.v || 0)) {
+      localStorage.setItem(LS_STATE(rid), JSON.stringify(remote))
+      changed = true
+    }
   }
+  if (changed && !state.roomId) renderHome()
 }
 
 // ---------------------------------------------------------------------------
@@ -285,7 +217,7 @@ function mutate(fn) {
   next.updatedAt = Date.now()
   state = next
   saveLocal()
-  broadcastState()
+  publishState()
   render()
 }
 
@@ -303,7 +235,9 @@ async function createRoom({ roomName, pin, tournamentDate }) {
   localStorage.setItem(LS_PIN(roomName), pin)  // creator device caches PIN
   saveLocal()
   setRoomInURL(roomName)
-  joinTrysteroRoom(roomName)
+  // Seed the cloud, then subscribe for updates from other devices.
+  await setRoomState(roomName, state)
+  joinCloudRoom(roomName)
   // Auto-register the creator if we remember their name — they're clearly
   // playing the tournament they just created.
   if (myName && !state.players.some(p => p.name.toLowerCase() === myName.toLowerCase())) {
@@ -519,12 +453,13 @@ function showHome() {
   $('[data-role="tabbar"]').classList.add('hidden')
   $('[data-role="share-btn"]').classList.add('hidden')
   $('[data-role="room-name"]').textContent = 'Carnage Courts'
-  setConnStatus('offline', 'Home')
+  setConnStatus(cloudConfigured() ? 'online' : 'offline',
+                cloudConfigured() ? 'Home' : 'Offline (local)')
   renderHome()
   showView('home')
-  // Listen for state updates (incl. delete tombstones) on every local
-  // tournament while the user is on the home page.
-  startHomeListeners()
+  // Fetch the latest snapshot of every locally-known room so cards
+  // reflect updates made on other devices while this one was closed.
+  syncAllRoomsFromCloud()
 }
 
 function showWelcome() {
@@ -557,10 +492,6 @@ function setConnStatus(kind, label) {
   else if (kind === 'connecting') { dot.classList.add('bg-amber') }
   else                        { dot.classList.add('bg-sub') }
   lab.textContent = label
-}
-
-function updatePeerCount() {
-  $('[data-role="peer-count"]').textContent = `${peerCount} ${peerCount === 1 ? 'peer' : 'peers'}`
 }
 
 function render() {
@@ -1142,7 +1073,7 @@ function wireHome() {
     if (!confirm(`Change your identity on this device? You can always claim "${myName}" again by re-entering the same name.`)) return
     myName = ''
     localStorage.removeItem('cc:myName')
-    stopAllHomeListeners()
+    leaveCloudRoom()
     showWelcome()
   }
 
@@ -1198,7 +1129,7 @@ function wireBrand() {
   $('[data-role="brand"]').onclick = () => {
     // If in a room, go back to home. If already on home/setup, no-op.
     if (state.roomId) {
-      if (roomHandle) { try { roomHandle.leave() } catch {} ; roomHandle = null }
+      leaveCloudRoom()
       state = initialState()
       clearRoomFromURL()
       showHome()
@@ -1317,7 +1248,9 @@ async function boot() {
     if (local) state = local
     else { state = initialState(); state.roomId = urlRoom }
     setRoomInURL(urlRoom) // normalise legacy ?room= to ?r=
-    joinTrysteroRoom(urlRoom)
+    // joinCloudRoom handles delete detection — it fetches the cloud
+    // state, notices deleted:true, and bounces to home with a toast.
+    joinCloudRoom(urlRoom)
   }
 
   // Every user must identify themselves once per device. The name seeds

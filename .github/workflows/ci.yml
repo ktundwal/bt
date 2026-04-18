@@ -50,6 +50,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Inject runtime config from secrets
+        env:
+          UPSTASH_REDIS_REST_URL:   ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+        run: |
+          cat > config.js <<EOF
+          // Generated at deploy time from repository secrets. Do not commit.
+          export const UPSTASH_REDIS_REST_URL   = '${UPSTASH_REDIS_REST_URL}'
+          export const UPSTASH_REDIS_REST_TOKEN = '${UPSTASH_REDIS_REST_TOKEN}'
+          EOF
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
