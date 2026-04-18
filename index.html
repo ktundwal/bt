@@ -23,9 +23,9 @@
             line:    '#273355',   // borders / dividers
             ink:     '#f8fafc',
             sub:     '#94a3b8',
-            volt:    '#df2027',   // BWF primary red (CTAs, accents, identity)
-            danger:  '#d7141c',   // BWF logo red (destructive hover / text)
-            court:   '#00af6f',   // BWF secondary green (live, winner, online)
+            volt:    '#0080c6',   // BWF blue (primary CTAs, identity, focus)
+            danger:  '#d7141c',   // BWF logo red — reserved for destructive
+            court:   '#00af6f',   // BWF court green (live, winner, online)
             amber:   '#ffb020',   // Gold for rank-1 / trophy / finished
             navy:    '#1d4559'    // BWF navy accent
           },
@@ -74,7 +74,11 @@
       <!-- VIEW: WELCOME — first-time identity capture -->
       <section data-view="welcome" class="hidden space-y-6">
         <div class="text-center pt-6">
-          <div class="text-6xl mb-2">🏸</div>
+          <svg viewBox="0 0 64 64" class="w-16 h-16 mx-auto mb-3 text-volt" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" aria-hidden="true">
+            <path d="M14 12 L32 50 L50 12"/>
+            <path d="M22 36 L42 36"/>
+            <circle cx="32" cy="52" r="3.5" fill="currentColor" stroke="none"/>
+          </svg>
           <h2 class="font-display text-3xl font-bold tracking-tight">Welcome to Carnage Courts</h2>
           <p class="text-sub mt-1 text-sm">Identify yourself once per device.</p>
         </div>
@@ -101,7 +105,11 @@
       <!-- VIEW: HOME — lists tournaments on this device -->
       <section data-view="home" class="hidden space-y-6">
         <div class="text-center pt-4">
-          <div class="text-6xl mb-2">🏸</div>
+          <svg viewBox="0 0 64 64" class="w-16 h-16 mx-auto mb-3 text-volt" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" aria-hidden="true">
+            <path d="M14 12 L32 50 L50 12"/>
+            <path d="M22 36 L42 36"/>
+            <circle cx="32" cy="52" r="3.5" fill="currentColor" stroke="none"/>
+          </svg>
           <h2 class="font-display text-3xl font-bold tracking-tight">Carnage Courts</h2>
           <p class="text-sub mt-1 text-sm">Peer-to-peer. No signup. Bring the shuttle.</p>
           <p data-role="home-greeting" class="hidden text-sm mt-3">
@@ -145,7 +153,11 @@
         </button>
 
         <div class="text-center pt-2">
-          <div class="text-5xl mb-2">🏸</div>
+          <svg viewBox="0 0 64 64" class="w-12 h-12 mx-auto mb-2 text-volt" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" aria-hidden="true">
+            <path d="M14 12 L32 50 L50 12"/>
+            <path d="M22 36 L42 36"/>
+            <circle cx="32" cy="52" r="3.5" fill="currentColor" stroke="none"/>
+          </svg>
           <h2 class="font-display text-2xl font-bold tracking-tight">New Tournament</h2>
         </div>
 

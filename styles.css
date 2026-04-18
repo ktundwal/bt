@@ -23,7 +23,7 @@ body {
   transition: color 120ms ease;
 }
 .tab-btn.active {
-  color: #df2027;     /* BWF red on the active tab */
+  color: #0080c6;     /* BWF blue on the active tab */
 }
 .tab-btn:active {
   transform: scale(0.96);
@@ -51,7 +51,7 @@ input.score-input::-webkit-inner-spin-button {
 }
 input.score-input:focus {
   outline: none;
-  border-color: #df2027;
+  border-color: #0080c6;
 }
 
 /* Winner glow — BWF court green */
