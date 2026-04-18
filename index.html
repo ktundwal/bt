@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <meta name="description" content="Zero-auth, peer-to-peer badminton tournament engine. Randomize teams, run a round-robin, track the carnage." />
+  <title>Carnage Courts — Badminton Tournament Engine</title>
+  <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><text y='54' font-size='54'>🏸</text></svg>" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            bg:      '#0a0a0a',
+            panel:   '#141414',
+            panel2:  '#1c1c1c',
+            line:    '#2a2a2a',
+            ink:     '#f5f5f5',
+            sub:     '#9ca3af',
+            danger:  '#ef2b4b',
+            volt:    '#00ff88',
+            amber:   '#ffb020'
+          },
+          fontFamily: {
+            display: ['"Space Grotesk"', 'system-ui', 'sans-serif'],
+            body:    ['Inter', 'system-ui', 'sans-serif'],
+            mono:    ['"JetBrains Mono"', 'ui-monospace', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="bg-bg text-ink font-body min-h-dvh flex flex-col overflow-x-hidden">
+
+  <!-- HEADER -->
+  <header class="sticky top-0 z-30 bg-bg/95 backdrop-blur border-b border-line">
+    <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+      <div class="min-w-0 flex-1">
+        <div class="flex items-center gap-2 text-[11px] uppercase tracking-widest text-sub">
+          <span class="inline-block w-2 h-2 rounded-full bg-sub" data-role="conn-dot"></span>
+          <span data-role="conn-label">Offline</span>
+          <span class="text-line">·</span>
+          <span data-role="peer-count">0 peers</span>
+        </div>
+        <h1 class="font-display text-xl leading-tight truncate">
+          <span data-role="room-name">Carnage Courts</span>
+        </h1>
+      </div>
+      <button data-role="share-btn"
+              class="shrink-0 bg-panel2 border border-line active:scale-95 transition text-ink font-semibold text-sm px-3 py-2 rounded-lg hidden"
+              aria-label="Share room link">
+        📋 Share
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT -->
+  <main class="flex-1 overflow-y-auto pb-28">
+    <div class="max-w-3xl mx-auto px-4 py-5">
+
+      <!-- SETUP: landing / create room -->
+      <section data-view="setup" class="hidden space-y-6">
+        <div class="text-center pt-6">
+          <div class="text-6xl mb-2">🏸</div>
+          <h2 class="font-display text-3xl font-bold tracking-tight">Carnage Courts</h2>
+          <p class="text-sub mt-1">A no-signup, peer-to-peer tournament engine. Bring the shuttle. Keep the ego at home.</p>
+        </div>
+
+        <div class="bg-panel border border-line rounded-2xl p-5 space-y-4">
+          <div>
+            <label class="block text-xs uppercase tracking-widest text-sub font-semibold mb-2">Room Name</label>
+            <div class="flex gap-2">
+              <input data-role="new-room-name"
+                     class="flex-1 bg-panel2 border border-line rounded-xl px-4 py-3 text-lg font-display focus:outline-none focus:border-volt"
+                     placeholder="SaturdayOpen-Shuttlecocks"
+                     autocomplete="off" autocapitalize="off" />
+              <button data-role="roll-room-name"
+                      class="shrink-0 bg-panel2 border border-line rounded-xl px-4 text-xl active:scale-95 transition"
+                      aria-label="Randomize room name">🎲</button>
+            </div>
+            <p class="text-xs text-sub mt-1">Share this name (and the URL) with players.</p>
+          </div>
+
+          <div>
+            <label class="block text-xs uppercase tracking-widest text-sub font-semibold mb-2">Admin PIN (2 digits)</label>
+            <input data-role="new-room-pin"
+                   inputmode="numeric" pattern="[0-9]{2}" maxlength="2"
+                   class="w-full bg-panel2 border border-line rounded-xl px-4 py-3 text-2xl font-mono tracking-[0.5em] text-center focus:outline-none focus:border-volt"
+                   placeholder="••" />
+            <p class="text-xs text-sub mt-1">Memorize this. You'll need it to randomize teams, log scores, or reset. Anyone else with the PIN can too.</p>
+          </div>
+
+          <button data-role="create-room"
+                  class="w-full bg-volt text-bg font-display font-bold text-lg py-4 rounded-xl active:scale-[0.98] transition">
+            Start Tournament →
+          </button>
+        </div>
+
+        <div class="text-center">
+          <p class="text-xs text-sub">
+            Or <button data-role="join-existing" class="underline text-ink">join an existing room</button>
+          </p>
+        </div>
+      </section>
+
+      <!-- TAB: LOBBY -->
+      <section data-view="lobby" class="hidden space-y-6">
+        <div class="bg-panel border border-line rounded-2xl p-5">
+          <div class="flex items-baseline justify-between mb-3">
+            <h2 class="font-display text-xl font-bold">Victim List</h2>
+            <span class="text-sm text-sub"><span data-role="player-count">0</span> signed up</span>
+          </div>
+
+          <form data-role="add-player-form" class="flex gap-2 mb-4">
+            <input data-role="add-player-name"
+                   class="flex-1 bg-panel2 border border-line rounded-xl px-4 py-3 text-base focus:outline-none focus:border-volt"
+                   placeholder="Your name"
+                   autocomplete="off" maxlength="24" />
+            <button type="submit"
+                    class="shrink-0 bg-volt text-bg font-bold px-5 rounded-xl active:scale-95 transition">
+              Add
+            </button>
+          </form>
+
+          <ul data-role="player-list" class="divide-y divide-line"></ul>
+          <p data-role="player-empty" class="text-center text-sub text-sm py-6">No one's brave enough yet.</p>
+        </div>
+
+        <div class="bg-panel border border-line rounded-2xl p-5 space-y-3">
+          <div class="flex items-baseline justify-between">
+            <h2 class="font-display text-xl font-bold">Teams</h2>
+            <span data-role="teams-status" class="text-xs text-sub uppercase tracking-widest">Unformed</span>
+          </div>
+          <div data-role="teams-list" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+          <p data-role="teams-empty" class="text-center text-sub text-sm py-4">Randomize when the roster is locked in.</p>
+
+          <button data-role="randomize-teams"
+                  class="w-full bg-danger text-ink font-display font-bold text-lg py-4 rounded-xl active:scale-[0.98] transition disabled:opacity-40 disabled:cursor-not-allowed">
+            🎲 Randomize Teams
+          </button>
+          <p class="text-xs text-sub text-center">Need 4+ players (even number). Odd roster gets a BYE.</p>
+        </div>
+
+        <div class="bg-panel border border-line rounded-2xl p-5 space-y-3">
+          <h3 class="font-display text-sm uppercase tracking-widest text-sub">Admin</h3>
+          <div class="grid grid-cols-2 gap-2">
+            <button data-role="change-courts"
+                    class="bg-panel2 border border-line rounded-xl py-3 text-sm font-semibold active:scale-95 transition">
+              Courts: <span data-role="court-count">4</span>
+            </button>
+            <button data-role="reset-tournament"
+                    class="bg-panel2 border border-danger/50 text-danger rounded-xl py-3 text-sm font-semibold active:scale-95 transition">
+              🗑 Reset
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB: MATCHES -->
+      <section data-view="matches" class="hidden space-y-4">
+        <div data-role="matches-empty" class="bg-panel border border-line rounded-2xl p-8 text-center">
+          <div class="text-5xl mb-2">📋</div>
+          <p class="text-sub">No matches yet. Randomize teams in the Lobby to generate the schedule.</p>
+        </div>
+        <div data-role="matches-list" class="space-y-4"></div>
+      </section>
+
+      <!-- TAB: LEADERBOARD -->
+      <section data-view="leaderboard" class="hidden space-y-3">
+        <div data-role="leaderboard-empty" class="bg-panel border border-line rounded-2xl p-8 text-center">
+          <div class="text-5xl mb-2">🏆</div>
+          <p class="text-sub">Rankings appear once the first match is logged.</p>
+        </div>
+        <ol data-role="leaderboard-list" class="space-y-2"></ol>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- BOTTOM TAB BAR (thumb-reach, iOS/Android native feel) -->
+  <nav data-role="tabbar" class="fixed inset-x-0 bottom-0 z-30 bg-panel/95 backdrop-blur border-t border-line pb-[env(safe-area-inset-bottom)] hidden">
+    <div class="max-w-3xl mx-auto grid grid-cols-3">
+      <button data-tab="lobby" class="tab-btn py-3 flex flex-col items-center gap-0.5">
+        <span class="text-xl">🏸</span>
+        <span class="text-[10px] uppercase tracking-widest font-semibold">Lobby</span>
+      </button>
+      <button data-tab="matches" class="tab-btn py-3 flex flex-col items-center gap-0.5">
+        <span class="text-xl">⚔️</span>
+        <span class="text-[10px] uppercase tracking-widest font-semibold">Matches</span>
+      </button>
+      <button data-tab="leaderboard" class="tab-btn py-3 flex flex-col items-center gap-0.5">
+        <span class="text-xl">🏆</span>
+        <span class="text-[10px] uppercase tracking-widest font-semibold">Standings</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- PIN MODAL -->
+  <div data-role="pin-modal" class="hidden fixed inset-0 z-50 bg-bg/90 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
+    <div class="bg-panel border border-line rounded-2xl p-5 w-full max-w-sm space-y-4">
+      <h3 class="font-display text-xl font-bold">Admin PIN required</h3>
+      <p class="text-sm text-sub" data-role="pin-reason">Enter the 2-digit PIN to continue.</p>
+      <input data-role="pin-input"
+             inputmode="numeric" pattern="[0-9]{2}" maxlength="2"
+             class="w-full bg-panel2 border border-line rounded-xl px-4 py-4 text-3xl font-mono tracking-[0.5em] text-center focus:outline-none focus:border-volt"
+             placeholder="••" />
+      <p data-role="pin-error" class="text-danger text-sm text-center hidden">Wrong PIN.</p>
+      <div class="grid grid-cols-2 gap-2">
+        <button data-role="pin-cancel" class="bg-panel2 border border-line py-3 rounded-xl font-semibold">Cancel</button>
+        <button data-role="pin-submit" class="bg-volt text-bg py-3 rounded-xl font-bold">Unlock</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div data-role="toast" class="fixed top-20 left-1/2 -translate-x-1/2 z-40 hidden">
+    <div class="bg-panel2 border border-line rounded-full px-4 py-2 text-sm shadow-2xl"></div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

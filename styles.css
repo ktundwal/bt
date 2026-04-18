@@ -1,0 +1,86 @@
+:root {
+  color-scheme: dark;
+}
+
+html, body {
+  overscroll-behavior-y: contain;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+body {
+  /* Subtle grid texture so the black doesn't feel flat */
+  background-image:
+    radial-gradient(circle at 20% 10%, rgba(0, 255, 136, 0.05), transparent 50%),
+    radial-gradient(circle at 80% 90%, rgba(239, 43, 75, 0.05), transparent 50%);
+  background-attachment: fixed;
+}
+
+/* Tabs */
+.tab-btn {
+  color: #6b7280;
+  transition: color 120ms ease;
+}
+.tab-btn.active {
+  color: #00ff88;
+}
+.tab-btn:active {
+  transform: scale(0.96);
+}
+
+/* Score input — hide spinner, big tap target */
+input.score-input {
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 700;
+  font-size: 2rem;
+  line-height: 1;
+  text-align: center;
+  width: 100%;
+  padding: 0.9rem 0;
+  background: #1c1c1c;
+  border: 1px solid #2a2a2a;
+  border-radius: 0.75rem;
+  color: #f5f5f5;
+  -moz-appearance: textfield;
+}
+input.score-input::-webkit-outer-spin-button,
+input.score-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input.score-input:focus {
+  outline: none;
+  border-color: #00ff88;
+}
+
+/* Winner glow */
+.winner {
+  box-shadow: inset 0 0 0 2px #00ff88;
+  background: rgba(0, 255, 136, 0.06);
+}
+.loser {
+  opacity: 0.55;
+}
+
+/* Rank highlights */
+.rank-1 { border-color: #ffb020 !important; box-shadow: 0 0 0 1px #ffb020 inset; }
+.rank-2 { border-color: #9ca3af !important; }
+.rank-3 { border-color: #b87333 !important; }
+
+/* Pulsing connection dot */
+.pulse-dot {
+  animation: pulse-volt 2s ease-in-out infinite;
+}
+@keyframes pulse-volt {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 255, 136, 0.5); }
+  50%      { box-shadow: 0 0 0 6px rgba(0, 255, 136, 0); }
+}
+
+/* Safe-area padding for notched devices in landscape */
+@supports (padding: max(0px)) {
+  header, main { padding-left: max(1rem, env(safe-area-inset-left)); padding-right: max(1rem, env(safe-area-inset-right)); }
+}
+
+/* Prevent zoom on focus (iOS) — inputs must be >=16px */
+input, button, select, textarea { font-size: 16px; }
+input.score-input { font-size: 2rem; } /* explicit override, safe because it's a >16 value */
