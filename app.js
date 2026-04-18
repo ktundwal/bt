@@ -3,7 +3,12 @@
 // Zero-auth, peer-to-peer. State lives in localStorage; syncs via WebRTC.
 // ============================================================================
 
-import { joinRoom, selfId } from 'https://cdn.jsdelivr.net/npm/@trystero-p2p/torrent@0.23.0/+esm'
+// Trystero "nostr" strategy: WebRTC signaling over public Nostr relays.
+// Unlike the default "torrent" strategy (BitTorrent trackers — often blocked
+// by managed-device firewalls and corporate DPI), Nostr uses plain wss://
+// connections to general-purpose relay servers, so it passes through
+// restrictive networks that block BitTorrent traffic.
+import { joinRoom, selfId } from 'https://cdn.jsdelivr.net/npm/@trystero-p2p/nostr@0.23.0/+esm'
 import { buildSchedule, generateRoomName, generateTeamName, shuffled } from './lib/scheduler.mjs'
 import { validateScore } from './lib/scoring.mjs'
 

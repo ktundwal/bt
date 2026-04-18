@@ -3,7 +3,7 @@
 A zero-signup, zero-backend, peer-to-peer badminton tournament engine for your Saturday open. Randomize teams, run a round-robin, log scores, crown the champion. Runs entirely in the browser.
 
 - **No accounts.** No database. No server bills.
-- **No backend.** State syncs between phones over WebRTC using public BitTorrent trackers for signaling ([Trystero](https://github.com/dmotz/trystero)).
+- **No backend.** State syncs between phones over WebRTC, with signaling over public [Nostr](https://nostr.com) relays via [Trystero](https://github.com/dmotz/trystero). Plain `wss://` traffic that passes through firewalls that block BitTorrent-style signaling.
 - **Works offline.** Each device keeps a local copy; missing updates reconcile when peers reconnect.
 - **Mobile-first.** Built for sweaty fingers on phone screens.
 - **$0 to host.** Static site — deploy to GitHub Pages, Cloudflare Pages, Netlify, or anything that serves HTML.
@@ -75,10 +75,10 @@ WebRTC needs both peers to be able to reach each other. In practice:
 
 - ✅ **Same WiFi (venue, home)**: works.
 - ✅ **Different home networks**: works most of the time (STUN resolves NAT).
-- ⚠️ **Locked-down corporate / school networks**: may fail silently. Fall back to mobile hotspot.
+- ✅ **Managed / corporate networks**: usually works — signaling is over plain `wss://` Nostr relays (not BitTorrent trackers, which are commonly blocked).
 - ⚠️ **Two devices behind the same symmetric-NAT cellular carrier**: rare, but can fail without a TURN server. Switching one device to WiFi usually fixes it.
 
-If you need bulletproof sync across any network, you can plug in a tiny paid TURN service (e.g. [Open Relay](https://www.metered.ca/tools/openrelay/)) or swap Trystero's strategy — see [Trystero docs](https://github.com/dmotz/trystero#strategy-comparison).
+If you need bulletproof sync across any network, you can plug in a tiny paid TURN service (e.g. [Open Relay](https://www.metered.ca/tools/openrelay/)). To try a different signaling strategy (MQTT, Firebase, etc.), swap the Trystero import in `app.js` — see [Trystero docs](https://github.com/dmotz/trystero#strategy-comparison).
 
 ---
 
